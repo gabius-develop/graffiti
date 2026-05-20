@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Timeline en la Informática</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <canvas id="aurora-canvas"></canvas>
+
+    <div class="main-container">
+        <!-- PLANETA 3D (modelo GLB) - script.js línea ~103 -->
+        <div class="planet-wrapper" id="planet-wrapper">
+            <canvas id="planet-canvas"></canvas>
+        </div>
+
+        <button class="play-btn" id="play-btn" aria-label="Iniciar viaje">
+            <div class="play-btn-inner">
+                <div class="play-icon"></div>
+            </div>
+        </button>
+
+        <div class="pixel-text" id="pixel-text">
+            <span style="animation-delay: 0s">P</span><span style="animation-delay: 0.1s">L</span><span style="animation-delay: 0.2s">A</span><span style="animation-delay: 0.3s">Y</span><span class="pixel-space"></span><span style="animation-delay: 0.5s">D</span><span style="animation-delay: 0.6s">O</span><span class="pixel-space"></span><span style="animation-delay: 0.8s">I</span><span style="animation-delay: 0.9s">T</span>
+        </div>
+    </div>
+
+    <!-- Duende: top-right corner -->
+    <div class="character-overlay" id="character-overlay">
+        <div class="character-container" id="character-container">
+            <div class="speech-bubble" id="speech-bubble">
+                <p>¡Bienvenido a este divertido viaje!</p>
+                <div class="speech-bubble-tail"></div>
+            </div>
+            <img src="images/duende.png" alt="Duende guía" class="character-img" id="character-img">
+            <!-- Canvas para la explosión boombox sobre el duende -->
+            <canvas id="explosion-canvas"></canvas>
+            <!-- Leyenda MENU que aparece después de la explosión -->
+            <div class="menu-label" id="menu-label">
+                <span style="animation-delay: 0s">M</span><span style="animation-delay: 0.1s">E</span><span style="animation-delay: 0.2s">N</span><span style="animation-delay: 0.3s">U</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MSN Messenger models: bottom-left corner -->
+    <div class="msn-container" id="msn-container">
+        <canvas id="msn-canvas"></canvas>
+    </div>
+
+    <!-- VENTANA MSN MESSENGER (aparece al hacer click en modelos verde/azul) -->
+    <!-- script.js línea ~290 (onMsnButtonClick) controla cuándo se abre/cierra -->
+    <div class="msn-window-overlay" id="msn-window-overlay">
+        <div class="msn-window" id="msn-window">
+            <div class="title-bar">
+                <span>💬 MSN Messenger</span>
+                <div>
+                    <button class="title-btn">_</button>
+                    <button class="title-btn">□</button>
+                    <button class="title-btn msn-close-btn" id="msn-close-btn">×</button>
+                </div>
+            </div>
+
+            <div class="menu">File&nbsp;&nbsp; Edit&nbsp;&nbsp; Actions&nbsp;&nbsp; Tools&nbsp;&nbsp; Help</div>
+
+            <div class="toolbar">
+                <span>🟢 Invite</span>
+                <span>🖼 Send Files</span>
+                <span>🎥 Video</span>
+                <span>🎙 Voice</span>
+                <span>🎮 Games</span>
+                <strong>msn</strong>
+            </div>
+
+            <div class="msn-content">
+                <div class="chat-area">
+                    <div class="to">To: <span id="msn-to-user"></span></div>
+                    <div class="messages" id="msn-messages"></div>
+
+                    <div class="tools">
+                        <span>A</span>
+                        <span>🙂</span>
+                        <span>🎤 Voice Clip</span>
+                        <span>🖼</span>
+                        <span>😊</span>
+                    </div>
+
+                    <div class="input-area">
+                        <textarea id="msn-input" placeholder="Escribe un mensaje..."></textarea>
+                        <div>
+                            <button id="msn-send-btn">Send</button>
+                            <button>Search</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="side-panel">
+                    <div class="avatar">
+                        <div class="person"></div>
+                    </div>
+                    <div class="avatar">
+                        <div class="duck">🐤</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                Click for new Emoticons and Theme Packs from Blue Mountain
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
