@@ -303,7 +303,8 @@
     // Three.js setup
     const scene = new THREE.Scene();
 
-    const size = Math.min(container.clientWidth || 280, container.clientHeight || 280);
+    const msnCanvas = document.getElementById('msn-canvas');
+    const size = msnCanvas.clientWidth || 200;
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 1, 4);
     camera.lookAt(0, 0.5, 0);
@@ -490,7 +491,7 @@
 
     // Resize
     function onResize() {
-        const s = Math.min(container.clientWidth, container.clientHeight);
+        const s = msnCanvas.clientWidth;
         if (s > 0) {
             renderer.setSize(s, s);
         }
