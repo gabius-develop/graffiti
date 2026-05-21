@@ -103,7 +103,10 @@
 
 // =============================================================================
 // ===== PLANETA 3D (modelo GLB) - gira sobre su eje al mantener click    =====
+// ===== Scroll zoom: rueda del mouse acerca la cámara, el planeta crece  =====
+// ===== y al llegar al zoom máximo aparece el estadio desde el centro    =====
 // ===== Modelo cargado: models/little_planet_earth.glb                    =====
+// ===== Modelo estadio: models/modern_stadium.glb                         =====
 // =============================================================================
 (function initPlanet() {
     const wrapper = document.getElementById('planet-wrapper');
@@ -148,6 +151,18 @@
     let baseRotateX = 0;
     let baseRotateY = 0;
 
+    // ===== SCROLL ZOOM STATE =====
+    const ZOOM_MIN = 7;      // default camera Z (far)
+    const ZOOM_MAX = 1.0;    // closest camera Z (zoomed into stadium field)
+    let currentZoom = ZOOM_MIN;
+    const ZOOM_SPEED = 0.3;
+
+    // Stadium model state
+    let stadiumPivot = null;
+    let stadiumLoaded = false;
+    let stadiumVisible = false;
+    const STADIUM_APPEAR_ZOOM = 3.5; // zoom threshold where stadium starts appearing
+
     // Orbiting tech logos
     const orbitModels = [];
 
@@ -174,9 +189,40 @@
         // Load orbiting tech logos after planet is ready
         loadOrbitLogos();
 
+        // Load the stadium model
+        loadStadium();
+
     }, undefined, (error) => {
         console.error('Error loading planet model:', error);
     });
+
+    // Load modern stadium (hidden initially, appears on zoom)
+    // Stadium is added to the SCENE directly (not solarSystem) so it stays
+    // centered and doesn't spin with mouse drag
+    function loadStadium() {
+        loader.load('models/modern_stadium.glb', (gltf) => {
+            const model = gltf.scene;
+
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const modelSize = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
+
+            // Scale stadium to fit nicely
+            const scale = 1.6 / maxDim;
+            model.scale.setScalar(scale);
+            model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+
+            stadiumPivot = new THREE.Group();
+            stadiumPivot.add(model);
+            stadiumPivot.scale.setScalar(0.001); // Start invisible (tiny)
+            scene.add(stadiumPivot); // Added to scene, NOT solarSystem
+
+            stadiumLoaded = true;
+        }, undefined, (err) => {
+            console.error('Error loading stadium model:', err);
+        });
+    }
 
     // 4 tech logos orbiting the planet, each on a different orbital plane
     function loadOrbitLogos() {
@@ -225,6 +271,34 @@
         });
     }
 
+    // ===== SCROLL ZOOM (mouse wheel) =====
+    wrapper.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? ZOOM_SPEED : -ZOOM_SPEED;
+        currentZoom = Math.max(ZOOM_MAX, Math.min(ZOOM_MIN, currentZoom + delta));
+    }, { passive: false });
+
+    // Touch pinch zoom support
+    let lastPinchDist = 0;
+    wrapper.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+        }
+    }, { passive: true });
+
+    wrapper.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const delta = (lastPinchDist - dist) * 0.02;
+            currentZoom = Math.max(ZOOM_MAX, Math.min(ZOOM_MIN, currentZoom + delta));
+            lastPinchDist = dist;
+        }
+    }, { passive: true });
+
     // Mouse interaction - spin on own axis
     canvas.addEventListener('mousedown', (e) => {
         isHolding = true;
@@ -249,18 +323,20 @@
 
     window.addEventListener('mouseup', () => { isHolding = false; });
 
-    // Touch interaction
+    // Touch interaction (single finger drag)
     canvas.addEventListener('touchstart', (e) => {
-        isHolding = true;
-        lastMouseX = e.touches[0].clientX;
-        lastMouseY = e.touches[0].clientY;
-        velocityX = 0;
-        velocityY = 0;
+        if (e.touches.length === 1) {
+            isHolding = true;
+            lastMouseX = e.touches[0].clientX;
+            lastMouseY = e.touches[0].clientY;
+            velocityX = 0;
+            velocityY = 0;
+        }
         e.preventDefault();
     }, { passive: false });
 
     window.addEventListener('touchmove', (e) => {
-        if (!isHolding) return;
+        if (!isHolding || e.touches.length !== 1) return;
         const touch = e.touches[0];
         const dx = touch.clientX - lastMouseX;
         const dy = touch.clientY - lastMouseY;
@@ -274,36 +350,121 @@
 
     window.addEventListener('touchend', () => { isHolding = false; });
 
+    // Add zoom hint below the planet
+    const zoomHint = document.createElement('div');
+    zoomHint.className = 'zoom-hint';
+    zoomHint.textContent = '🖱 Scroll to zoom';
+    wrapper.style.position = 'relative';
+    wrapper.appendChild(zoomHint);
+
     // Animation loop
     function animate() {
         requestAnimationFrame(animate);
 
         const t = Date.now() * 0.001;
 
+        // Smooth camera zoom interpolation
+        const targetZ = currentZoom;
+        camera.position.z += (targetZ - camera.position.z) * 0.08;
+
+        // Calculate zoom progress (0 = far, 1 = fully zoomed)
+        const zoomProgress = 1 - (camera.position.z - ZOOM_MAX) / (ZOOM_MIN - ZOOM_MAX);
+
+        // As we zoom in, camera rises and tilts to look down at the field
+        const targetCamY = 0.8 + zoomProgress * 1.5;
+        camera.position.y += (targetCamY - camera.position.y) * 0.08;
+
+        // Camera X stays centered
+        const targetCamX = 0;
+        camera.position.x += (targetCamX - camera.position.x) * 0.08;
+
+        // LookAt smoothly transitions to center/down as we zoom
+        camera.lookAt(0, -zoomProgress * 0.5, 0);
+
+        // Dampen rotation as we zoom in (planet stops spinning when stadium appears)
+        const rotationDampen = Math.max(0, 1 - zoomProgress * 1.5);
+
         // Momentum when not holding
         if (!isHolding) {
-            baseRotateY += velocityY;
-            baseRotateX += velocityX;
+            baseRotateY += velocityY * rotationDampen;
+            baseRotateX += velocityX * rotationDampen;
             velocityX *= 0.97;
             velocityY *= 0.97;
         }
 
-        // Slow auto-rotation when idle
+        // Slow auto-rotation when idle (dampened by zoom)
         if (Math.abs(velocityX) < 0.0001 && Math.abs(velocityY) < 0.0001 && !isHolding) {
-            baseRotateY += 0.003;
+            baseRotateY += 0.003 * rotationDampen;
         }
 
-        // Float up and down (subtle)
-        const floatY = Math.sin(t * Math.PI * 0.5) * 0.1;
+        // Float up and down (subtle, also dampened)
+        const floatY = Math.sin(t * Math.PI * 0.5) * 0.1 * rotationDampen;
 
         // Rotate the entire solar system (planet + all logos move together)
-        solarSystem.rotation.x = baseRotateX;
+        solarSystem.rotation.x = baseRotateX * rotationDampen;
         solarSystem.rotation.y = baseRotateY;
         solarSystem.position.y = floatY;
 
         // Planet self-spin (slow additional rotation)
         if (planetPivot) {
             planetPivot.rotation.y = t * 0.15;
+        }
+
+        // ===== STADIUM ZOOM EFFECT =====
+        if (stadiumLoaded && stadiumPivot) {
+            // Stadium starts appearing when zoom passes 40%
+            const stadiumProgress = Math.max(0, (zoomProgress - 0.4) / 0.6);
+
+            if (stadiumProgress > 0) {
+                // Ease in with a smooth curve
+                const eased = stadiumProgress * stadiumProgress * (3 - 2 * stadiumProgress);
+
+                // Stadium grows and stays centered at origin
+                stadiumPivot.scale.setScalar(eased * 1.6);
+                stadiumPivot.position.set(0, 0, 0);
+                stadiumPivot.rotation.y = t * 0.15; // slow gentle rotation
+
+                // Planet DISAPPEARS completely as stadium appears
+                if (planetPivot) {
+                    const planetOpacity = Math.max(0, 1 - eased * 2.5);
+                    planetPivot.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            if (child.material.transparent !== true) {
+                                child.material.transparent = true;
+                            }
+                            child.material.opacity = planetOpacity;
+                        }
+                    });
+                    planetPivot.visible = planetOpacity > 0.01;
+                }
+
+                // Also fade the entire solarSystem (logos + planet group)
+                solarSystem.visible = (1 - eased * 2.5) > 0.01;
+
+                if (!stadiumVisible) {
+                    stadiumVisible = true;
+                }
+            } else {
+                stadiumPivot.scale.setScalar(0.001);
+                // Reset planet visibility and opacity
+                solarSystem.visible = true;
+                if (planetPivot) {
+                    planetPivot.visible = true;
+                    planetPivot.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.opacity = 1;
+                        }
+                    });
+                }
+                stadiumVisible = false;
+            }
+        }
+
+        // Hide zoom hint once user starts zooming
+        if (zoomProgress > 0.05) {
+            zoomHint.style.opacity = '0';
+        } else {
+            zoomHint.style.opacity = '';
         }
 
         // Animate orbiting tech logos within the solar system
@@ -316,6 +477,17 @@
             // Self-rotation (each logo spins on its own axis)
             orb.pivot.rotation.y = t * orb.selfSpin;
             orb.pivot.rotation.x = Math.sin(t * 0.5 + orb.startAngle) * 0.3;
+
+            // Fade out logos as we zoom in
+            const logoOpacity = Math.max(0, 1 - zoomProgress * 1.5);
+            orb.pivot.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    if (child.material.transparent !== true) {
+                        child.material.transparent = true;
+                    }
+                    child.material.opacity = logoOpacity;
+                }
+            });
         }
 
         renderer.render(scene, camera);
@@ -334,7 +506,41 @@
 })();
 
 
-// ===== PLAY BUTTON =====
+// =============================================================================
+// ===== HERO TEXT - Cycling titles with spring animation                  =====
+// ===== "Gabriel Torres Terrazas" static + "Developer" / "Fullstack"     =====
+// =============================================================================
+(function initHeroText() {
+    const titles = document.querySelectorAll('.hero-title');
+    if (!titles.length) return;
+
+    let currentIndex = 0;
+    const INTERVAL = 2500; // ms between transitions
+
+    function cycle() {
+        const current = titles[currentIndex];
+        // Exit current: slide up and fade out
+        current.classList.remove('active');
+        current.classList.add('exit-up');
+
+        // Next index
+        const nextIndex = (currentIndex + 1) % titles.length;
+        const next = titles[nextIndex];
+
+        // After transition out, set up next to enter from below
+        setTimeout(() => {
+            current.classList.remove('exit-up');
+            // Next enters: it starts at translateY(80px) by default (no active class)
+            next.classList.add('active');
+            currentIndex = nextIndex;
+        }, 400);
+    }
+
+    setInterval(cycle, INTERVAL);
+})();
+
+
+// ===== PLAY BUTTON (Metal Button) =====
 (function initPlayButton() {
     const playBtn = document.getElementById('play-btn');
     const overlay = document.getElementById('character-overlay');
@@ -1007,7 +1213,9 @@ window.renderSections = function(sections) {
             window.dispatchEvent(new CustomEvent('section-click', {
                 detail: { id: sec.id, label: sec.label, model: sec.model }
             }));
-            console.log(`Section clicked: ${sec.id}`);
+            if (window.openSectionExpand) {
+                window.openSectionExpand(sec.id, sec.label);
+            }
         });
 
         card.dataset.rotation = sec.rotation || 'default';
@@ -1023,9 +1231,198 @@ window.renderSections = function(sections) {
 document.querySelectorAll('.section-card').forEach((card) => {
     card.addEventListener('click', () => {
         const sectionId = card.dataset.section;
+        const label = card.querySelector('.section-label').textContent;
         window.dispatchEvent(new CustomEvent('section-click', {
-            detail: { id: sectionId, label: card.querySelector('.section-label').textContent }
+            detail: { id: sectionId, label: label }
         }));
-        console.log(`Section clicked: ${sectionId}`);
+        // Trigger the scroll-expand transition
+        if (window.openSectionExpand) {
+            window.openSectionExpand(sectionId, label);
+        }
     });
 });
+
+
+// =============================================================================
+// ===== SECTION EXPAND TRANSITION (scroll-to-expand media effect)         =====
+// ===== Triggered when clicking Hacking, Musica, Blog section cards       =====
+// ===== Scroll expands a centered panel to fullscreen, then shows section =====
+// =============================================================================
+(function initSectionExpand() {
+    const overlay = document.getElementById('section-expand-overlay');
+    const mediaEl = document.getElementById('section-expand-media');
+    const word1 = document.getElementById('section-expand-word1');
+    const word2 = document.getElementById('section-expand-word2');
+    const hintEl = document.getElementById('section-expand-hint');
+    const backBtn = document.getElementById('section-expand-back');
+    const contentEl = document.getElementById('section-content');
+
+    if (!overlay) return;
+
+    let scrollProgress = 0;
+    let isActive = false;
+    let isFullyExpanded = false;
+    let currentSectionId = '';
+    let touchStartY = 0;
+
+    const BASE_W = 300;
+    const BASE_H = 400;
+    const isMobile = () => window.innerWidth < 768;
+
+    function updateMedia() {
+        const maxExtraW = isMobile() ? 650 : 1250;
+        const maxExtraH = isMobile() ? 200 : 400;
+
+        const w = BASE_W + scrollProgress * maxExtraW;
+        const h = BASE_H + scrollProgress * maxExtraH;
+
+        mediaEl.style.width = Math.min(w, window.innerWidth) + 'px';
+        mediaEl.style.height = Math.min(h, window.innerHeight) + 'px';
+        mediaEl.style.maxWidth = '95vw';
+        mediaEl.style.maxHeight = '85vh';
+
+        // Border radius shrinks as it expands
+        mediaEl.style.borderRadius = (16 * (1 - scrollProgress)) + 'px';
+
+        // Title words fly apart
+        const tx = scrollProgress * (isMobile() ? 180 : 150);
+        word1.style.transform = `translateX(-${tx}vw)`;
+        word2.style.transform = `translateX(${tx}vw)`;
+
+        // Hint fades out
+        hintEl.style.opacity = Math.max(0, 1 - scrollProgress * 3);
+
+        // Show content and back button when fully expanded
+        if (scrollProgress >= 1 && !isFullyExpanded) {
+            isFullyExpanded = true;
+            contentEl.classList.add('visible');
+            backBtn.classList.add('visible');
+
+            // Make overlay fully fullscreen
+            mediaEl.style.width = '100vw';
+            mediaEl.style.height = '100vh';
+            mediaEl.style.maxWidth = '100vw';
+            mediaEl.style.maxHeight = '100vh';
+            mediaEl.style.borderRadius = '0';
+        }
+
+        if (scrollProgress < 0.75 && isFullyExpanded) {
+            isFullyExpanded = false;
+            contentEl.classList.remove('visible');
+            backBtn.classList.remove('visible');
+        }
+    }
+
+    // Open section expand
+    window.openSectionExpand = function(sectionId, label) {
+        currentSectionId = sectionId;
+        scrollProgress = 0;
+        isFullyExpanded = false;
+        isActive = true;
+
+        // Split label into title words
+        const words = label.split(' ');
+        word1.textContent = words[0] || '';
+        word2.textContent = words.slice(1).join(' ') || sectionId;
+
+        contentEl.innerHTML = '';
+        contentEl.classList.remove('visible');
+        backBtn.classList.remove('visible');
+
+        updateMedia();
+        overlay.classList.add('active');
+    };
+
+    // Close / go back
+    function closeSectionExpand() {
+        isActive = false;
+        isFullyExpanded = false;
+        scrollProgress = 0;
+        overlay.classList.remove('active');
+        contentEl.classList.remove('visible');
+        backBtn.classList.remove('visible');
+    }
+
+    backBtn.addEventListener('click', closeSectionExpand);
+
+    // Scroll/wheel to expand
+    function onWheel(e) {
+        if (!isActive) return;
+
+        // If fully expanded and scrolling back up at top
+        if (isFullyExpanded && e.deltaY < 0 && (contentEl.scrollTop <= 5)) {
+            isFullyExpanded = false;
+            contentEl.classList.remove('visible');
+            backBtn.classList.remove('visible');
+            scrollProgress = 0.95;
+            updateMedia();
+            e.preventDefault();
+            return;
+        }
+
+        if (!isFullyExpanded) {
+            e.preventDefault();
+            const delta = e.deltaY * 0.0012;
+            scrollProgress = Math.min(Math.max(scrollProgress + delta, 0), 1);
+            updateMedia();
+
+            // If scrolled all the way back, close
+            if (scrollProgress <= 0) {
+                closeSectionExpand();
+            }
+        }
+    }
+
+    // Touch support
+    function onTouchStart(e) {
+        if (!isActive) return;
+        touchStartY = e.touches[0].clientY;
+    }
+
+    function onTouchMove(e) {
+        if (!isActive || !touchStartY) return;
+
+        const touchY = e.touches[0].clientY;
+        const deltaY = touchStartY - touchY;
+
+        if (isFullyExpanded && deltaY < -20 && contentEl.scrollTop <= 5) {
+            isFullyExpanded = false;
+            contentEl.classList.remove('visible');
+            backBtn.classList.remove('visible');
+            scrollProgress = 0.95;
+            updateMedia();
+            e.preventDefault();
+            touchStartY = touchY;
+            return;
+        }
+
+        if (!isFullyExpanded) {
+            e.preventDefault();
+            const factor = deltaY < 0 ? 0.008 : 0.005;
+            scrollProgress = Math.min(Math.max(scrollProgress + deltaY * factor, 0), 1);
+            updateMedia();
+
+            if (scrollProgress <= 0) {
+                closeSectionExpand();
+            }
+            touchStartY = touchY;
+        }
+    }
+
+    function onTouchEnd() {
+        touchStartY = 0;
+    }
+
+    // ESC key to close
+    function onKeyDown(e) {
+        if (e.key === 'Escape' && isActive) {
+            closeSectionExpand();
+        }
+    }
+
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('keydown', onKeyDown);
+})();

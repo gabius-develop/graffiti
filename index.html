@@ -12,16 +12,33 @@
     <canvas id="aurora-canvas"></canvas>
 
     <div class="main-container">
-        <!-- PLANETA 3D (modelo GLB) - script.js línea ~103 -->
-        <div class="planet-wrapper" id="planet-wrapper">
-            <canvas id="planet-canvas"></canvas>
+        <div class="planet-row">
+            <!-- Hero Text - Name + cycling titles -->
+            <div class="hero-text" id="hero-text">
+                <h1 class="hero-name">Gabriel Torres Terrazas</h1>
+                <div class="hero-titles">
+                    <span class="hero-title active" data-index="0">Developer</span>
+                    <span class="hero-title" data-index="1">Fullstack</span>
+                </div>
+            </div>
+
+            <!-- PLANETA 3D (modelo GLB) - script.js línea ~103 -->
+            <div class="planet-wrapper" id="planet-wrapper">
+                <canvas id="planet-canvas"></canvas>
+            </div>
         </div>
 
-        <button class="play-btn" id="play-btn" aria-label="Iniciar viaje">
-            <div class="play-btn-inner">
-                <div class="play-icon"></div>
+        <!-- Metal Button (Play) -->
+        <div class="metal-btn-wrapper" id="metal-btn-wrapper">
+            <div class="metal-btn-outer">
+                <div class="metal-btn-inner"></div>
+                <button class="metal-btn" id="play-btn" aria-label="Iniciar viaje">
+                    <div class="metal-btn-shine"></div>
+                    <span class="metal-btn-text">▶ PLAY</span>
+                    <div class="metal-btn-hover-glow"></div>
+                </button>
             </div>
-        </button>
+        </div>
 
         <div class="pixel-text" id="pixel-text">
             <span style="animation-delay: 0s">P</span><span style="animation-delay: 0.1s">L</span><span
@@ -141,6 +158,32 @@
             </div>
         </div>
     </div>
+
+    <!-- Section Expand Overlay (scroll-to-expand transition) -->
+    <div class="section-expand-overlay" id="section-expand-overlay">
+        <div class="section-expand-media" id="section-expand-media">
+            <div class="section-expand-title" id="section-expand-title">
+                <span class="section-expand-word" id="section-expand-word1"></span>
+                <span class="section-expand-word" id="section-expand-word2"></span>
+            </div>
+        </div>
+        <div class="section-expand-hint" id="section-expand-hint">Scroll to expand</div>
+        <button class="section-expand-back" id="section-expand-back">&larr; Back</button>
+        <div class="section-content" id="section-content"></div>
+    </div>
+
+    <!-- SVG Glass Filter for Metal Button -->
+    <svg class="hidden-svg" style="position:absolute;width:0;height:0;overflow:hidden;">
+        <defs>
+            <filter id="container-glass" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.05 0.05" numOctaves="1" seed="1" result="turbulence"/>
+                <feGaussianBlur in="turbulence" stdDeviation="2" result="blurredNoise"/>
+                <feDisplacementMap in="SourceGraphic" in2="blurredNoise" scale="70" xChannelSelector="R" yChannelSelector="B" result="displaced"/>
+                <feGaussianBlur in="displaced" stdDeviation="4" result="finalBlur"/>
+                <feComposite in="finalBlur" in2="finalBlur" operator="over"/>
+            </filter>
+        </defs>
+    </svg>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
