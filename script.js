@@ -113,9 +113,9 @@
 
     // Three.js scene for the planet
     const scene = new THREE.Scene();
-    // Camera further back with wider FOV so the model is never clipped
-    const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 200);
-    camera.position.set(0, 0, 6);
+    // Camera: framing planet + orbiting logos inside canvas
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+    camera.position.set(0, 0.8, 7);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
@@ -134,9 +134,12 @@
     rimLight.position.set(-3, 1, -2);
     scene.add(rimLight);
 
-    // Pivot group: the model is centered inside this group,
-    // and we rotate the pivot so the planet spins on its own axis
-    let pivot = null;
+    // Solar system group: contains planet + all orbiting logos
+    // Rotating this group with the mouse moves EVERYTHING together
+    const solarSystem = new THREE.Group();
+    scene.add(solarSystem);
+
+    let planetPivot = null;
     let isHolding = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
@@ -145,31 +148,82 @@
     let baseRotateX = 0;
     let baseRotateY = 0;
 
-    // Load planet GLB
+    // Orbiting tech logos
+    const orbitModels = [];
+
     const loader = new THREE.GLTFLoader();
+
+    // Load planet GLB
     loader.load('models/little_planet_earth.glb', (gltf) => {
         const model = gltf.scene;
 
-        // Measure the model and center it at origin
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         const modelSize = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
 
-        // Scale so it fits nicely in view (diameter ~2 units, camera at z=6)
-        const scale = 2.5 / maxDim;
+        // Planet size (centered, leaves room for orbiting logos)
+        const scale = 1.6 / maxDim;
         model.scale.setScalar(scale);
-        // Offset the model so its center sits at 0,0,0 inside the pivot
         model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
 
-        // Wrap in pivot group for clean rotation around center
-        pivot = new THREE.Group();
-        pivot.add(model);
-        scene.add(pivot);
+        planetPivot = new THREE.Group();
+        planetPivot.add(model);
+        solarSystem.add(planetPivot);
+
+        // Load orbiting tech logos after planet is ready
+        loadOrbitLogos();
 
     }, undefined, (error) => {
         console.error('Error loading planet model:', error);
     });
+
+    // 4 tech logos orbiting the planet, each on a different orbital plane
+    function loadOrbitLogos() {
+        const logos = [
+            { file: 'models/html_logo__3d_model.glb',       orbitRadius: 1.8, speed: 0.7,  tiltX: 0.2,  tiltZ: 0.05, startAngle: 0 },
+            { file: 'models/css_logo_3d_model.glb',          orbitRadius: 2.0, speed: 0.55, tiltX: -0.15, tiltZ: 0.25, startAngle: Math.PI * 0.5 },
+            { file: 'models/javascript_logo__3d_model.glb',  orbitRadius: 2.2, speed: 0.45, tiltX: 0.1,  tiltZ: -0.2, startAngle: Math.PI },
+            { file: 'models/typescript_logo__3d_model.glb',  orbitRadius: 2.4, speed: 0.35, tiltX: -0.25, tiltZ: 0.15, startAngle: Math.PI * 1.5 },
+        ];
+
+        logos.forEach((logo) => {
+            loader.load(logo.file, (gltf) => {
+                const model = gltf.scene;
+
+                // Center and scale the logo
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const modelSize = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
+                const scale = 0.45 / maxDim;
+
+                model.scale.setScalar(scale);
+                model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+
+                // Each logo has its own orbital plane (tilted group)
+                const orbitPlane = new THREE.Group();
+                orbitPlane.rotation.x = logo.tiltX;
+                orbitPlane.rotation.z = logo.tiltZ;
+
+                const logoPivot = new THREE.Group();
+                logoPivot.add(model);
+                orbitPlane.add(logoPivot);
+                solarSystem.add(orbitPlane);
+
+                orbitModels.push({
+                    pivot: logoPivot,
+                    plane: orbitPlane,
+                    radius: logo.orbitRadius,
+                    speed: logo.speed,
+                    startAngle: logo.startAngle,
+                    selfSpin: 1.5 + Math.random(),
+                });
+            }, undefined, (err) => {
+                console.error('Error loading logo:', logo.file, err);
+            });
+        });
+    }
 
     // Mouse interaction - spin on own axis
     canvas.addEventListener('mousedown', (e) => {
@@ -224,27 +278,44 @@
     function animate() {
         requestAnimationFrame(animate);
 
-        if (pivot) {
-            // Momentum when not holding
-            if (!isHolding) {
-                baseRotateY += velocityY;
-                baseRotateX += velocityX;
-                velocityX *= 0.97;
-                velocityY *= 0.97;
-            }
+        const t = Date.now() * 0.001;
 
-            // Slow auto-rotation when idle
-            if (Math.abs(velocityX) < 0.0001 && Math.abs(velocityY) < 0.0001 && !isHolding) {
-                baseRotateY += 0.003;
-            }
+        // Momentum when not holding
+        if (!isHolding) {
+            baseRotateY += velocityY;
+            baseRotateX += velocityX;
+            velocityX *= 0.97;
+            velocityY *= 0.97;
+        }
 
-            // Float up and down (subtle)
-            const floatY = Math.sin(Date.now() * 0.001 * Math.PI * 0.5) * 0.1;
+        // Slow auto-rotation when idle
+        if (Math.abs(velocityX) < 0.0001 && Math.abs(velocityY) < 0.0001 && !isHolding) {
+            baseRotateY += 0.003;
+        }
 
-            // Rotate the pivot group (planet spins around its own center)
-            pivot.rotation.x = baseRotateX;
-            pivot.rotation.y = baseRotateY;
-            pivot.position.y = floatY;
+        // Float up and down (subtle)
+        const floatY = Math.sin(t * Math.PI * 0.5) * 0.1;
+
+        // Rotate the entire solar system (planet + all logos move together)
+        solarSystem.rotation.x = baseRotateX;
+        solarSystem.rotation.y = baseRotateY;
+        solarSystem.position.y = floatY;
+
+        // Planet self-spin (slow additional rotation)
+        if (planetPivot) {
+            planetPivot.rotation.y = t * 0.15;
+        }
+
+        // Animate orbiting tech logos within the solar system
+        for (const orb of orbitModels) {
+            const angle = orb.startAngle + t * orb.speed;
+            orb.pivot.position.x = Math.cos(angle) * orb.radius;
+            orb.pivot.position.z = Math.sin(angle) * orb.radius;
+            orb.pivot.position.y = 0;
+
+            // Self-rotation (each logo spins on its own axis)
+            orb.pivot.rotation.y = t * orb.selfSpin;
+            orb.pivot.rotation.x = Math.sin(t * 0.5 + orb.startAngle) * 0.3;
         }
 
         renderer.render(scene, camera);
@@ -786,9 +857,175 @@
         }, 50);
     });
 
-    // MENU label click (future use - dispatch event)
+    // MENU label click → show sections, hide play button
     menuLabel.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('menu-click'));
-        console.log('MENU clicked!');
+        const mainContainer = document.querySelector('.main-container');
+        const sectionsBar = document.getElementById('sections-bar');
+
+        mainContainer.classList.toggle('menu-open');
+        sectionsBar.classList.toggle('active');
+
+        // Initialize section models on first open
+        if (!window._sectionsInitialized) {
+            window._sectionsInitialized = true;
+            initSectionModels();
+        }
     });
 })();
+
+
+// =============================================================================
+// ===== SECCIONES DEL MENÚ (modelos 3D en cada tarjeta)                   =====
+// ===== Estructura dinámica: alimentada desde data-attributes o DB        =====
+// ===== Para agregar secciones desde DB: usa renderSections() más abajo   =====
+// =============================================================================
+
+// Initialize 3D models for each section card
+function initSectionModels() {
+    const cards = document.querySelectorAll('.section-card');
+
+    cards.forEach((card) => {
+        const canvas = card.querySelector('.section-canvas');
+        const modelPath = card.dataset.model;
+        const rotationType = card.dataset.rotation || 'default';
+        if (!modelPath) return;
+
+        setupSectionScene(canvas, modelPath, rotationType);
+    });
+}
+
+// Creates a mini Three.js scene for a section card
+// rotationType: 'default' = Y rotation, 'xy' = X+Y rotation, 'spin' = fast spin
+function setupSectionScene(canvas, modelPath, rotationType) {
+    rotationType = rotationType || 'default';
+    const size = canvas.clientWidth || 120;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 100);
+    camera.position.set(0, 0.5, 3);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(size, size);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(2, 2, 3);
+    scene.add(dirLight);
+    const rimLight = new THREE.PointLight(0x2ecc71, 0.3, 8);
+    rimLight.position.set(-2, 1, 1);
+    scene.add(rimLight);
+
+    let pivot = null;
+
+    const loader = new THREE.GLTFLoader();
+    loader.load(modelPath, (gltf) => {
+        const model = gltf.scene;
+
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const modelSize = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
+        const scale = 1.5 / maxDim;
+
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+
+        pivot = new THREE.Group();
+        pivot.add(model);
+        scene.add(pivot);
+    }, undefined, (err) => {
+        console.error('Error loading section model:', modelPath, err);
+    });
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if (pivot) {
+            if (rotationType === 'xy') {
+                // Rotate on both X and Y axes simultaneously
+                pivot.rotation.y += 0.01;
+                pivot.rotation.x += 0.01;
+            } else {
+                // Default: Y rotation with subtle X wobble
+                pivot.rotation.y += 0.01;
+                pivot.rotation.x = Math.sin(Date.now() * 0.001) * 0.1;
+            }
+        }
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize
+    function onResize() {
+        const s = canvas.clientWidth;
+        if (s > 0) {
+            renderer.setSize(s, s);
+        }
+    }
+    window.addEventListener('resize', onResize);
+}
+
+// =============================================================================
+// ===== renderSections() - Función para alimentar secciones desde una DB  =====
+// ===== Llama esta función pasándole un array de objetos con la estructura =====
+// ===== que se muestra en el ejemplo de abajo.                            =====
+// =============================================================================
+//
+// Ejemplo de uso:
+//
+//   renderSections([
+//     { id: 'hacking',  label: 'Hacking', model: 'models/old_hacking_pc.glb' },
+//     { id: 'musica',   label: 'Musica',  model: 'models/music_cassette.glb' },
+//     { id: 'blog',     label: 'Blog',    model: 'models/3d_low_poly_catroon_items_with_eyes_and_mouth.glb' },
+//     { id: 'nuevo',    label: 'Nuevo',   model: 'models/nuevo_modelo.glb' },
+//   ]);
+//
+window.renderSections = function(sections) {
+    const bar = document.getElementById('sections-bar');
+    bar.innerHTML = '';
+
+    sections.forEach((sec) => {
+        const card = document.createElement('div');
+        card.className = 'section-card';
+        card.dataset.section = sec.id;
+        card.dataset.model = sec.model;
+
+        const canvas = document.createElement('canvas');
+        canvas.className = 'section-canvas';
+
+        const label = document.createElement('span');
+        label.className = 'section-label';
+        label.textContent = sec.label;
+
+        card.appendChild(canvas);
+        card.appendChild(label);
+        bar.appendChild(card);
+
+        // Click handler for each dynamic section
+        card.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('section-click', {
+                detail: { id: sec.id, label: sec.label, model: sec.model }
+            }));
+            console.log(`Section clicked: ${sec.id}`);
+        });
+
+        card.dataset.rotation = sec.rotation || 'default';
+
+        // Setup 3D scene for this card
+        requestAnimationFrame(() => {
+            setupSectionScene(canvas, sec.model, sec.rotation || 'default');
+        });
+    });
+};
+
+// Click handler for static HTML section cards
+document.querySelectorAll('.section-card').forEach((card) => {
+    card.addEventListener('click', () => {
+        const sectionId = card.dataset.section;
+        window.dispatchEvent(new CustomEvent('section-click', {
+            detail: { id: sectionId, label: card.querySelector('.section-label').textContent }
+        }));
+        console.log(`Section clicked: ${sectionId}`);
+    });
+});

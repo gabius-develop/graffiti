@@ -50,6 +50,28 @@
         </div>
     </div>
 
+    <!-- ============================================================ -->
+    <!-- SECCIONES DEL MENÚ (aparecen al hacer click en MENU)        -->
+    <!-- Estructura dinámica: cada .section-card tiene un canvas 3D  -->
+    <!-- Para agregar más secciones, duplica un section-card o       -->
+    <!-- aliméntalas desde una base de datos con JS (ver script.js   -->
+    <!-- función renderSections)                                     -->
+    <!-- ============================================================ -->
+    <div class="sections-bar" id="sections-bar">
+        <div class="section-card" data-section="hacking" data-model="models/old_hacking_pc.glb">
+            <canvas class="section-canvas"></canvas>
+            <span class="section-label">Hacking</span>
+        </div>
+        <div class="section-card" data-section="musica" data-model="models/music_cassette.glb" data-rotation="xy">
+            <canvas class="section-canvas"></canvas>
+            <span class="section-label">Musica</span>
+        </div>
+        <div class="section-card" data-section="blog" data-model="models/3d_low_poly_catroon_items_with_eyes_and_mouth.glb">
+            <canvas class="section-canvas"></canvas>
+            <span class="section-label">Blog</span>
+        </div>
+    </div>
+
     <!-- MSN Messenger models: bottom-left corner -->
     <div class="msn-container" id="msn-container">
         <canvas id="msn-canvas"></canvas>

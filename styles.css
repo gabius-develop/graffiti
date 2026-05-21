@@ -44,10 +44,85 @@ html, body {
     gap: 40px;
 }
 
+/* ===== HIDE play-btn and pixel-text when menu is open ===== */
+.main-container.menu-open .play-btn,
+.main-container.menu-open .pixel-text {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.5);
+    transition: all 0.5s ease;
+}
+
+/* ===== SECTIONS BAR (horizontal menu, below planet) ===== */
+.sections-bar {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+}
+
+.sections-bar.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.section-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+    position: relative;
+}
+
+.section-card:hover {
+    transform: translateY(-10px) scale(1.05);
+}
+
+.section-card:hover .section-label {
+    text-shadow:
+        0 0 10px currentColor,
+        0 0 30px currentColor;
+}
+
+.section-canvas {
+    width: 120px;
+    height: 120px;
+    display: block;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.section-card:hover .section-canvas {
+    border-color: rgba(46, 204, 113, 0.4);
+    box-shadow: 0 0 20px rgba(46, 204, 113, 0.15);
+}
+
+.section-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: #2ecc71;
+    text-shadow:
+        0 0 5px rgba(46, 204, 113, 0.4),
+        2px 2px 0 rgba(0, 0, 0, 0.5);
+    transition: text-shadow 0.3s ease;
+}
+
 /* ===== PLANET 3D (GLB model canvas) ===== */
 .planet-wrapper {
-    width: 280px;
-    height: 280px;
+    width: 400px;
+    height: 400px;
     cursor: grab;
     user-select: none;
 }
@@ -697,9 +772,22 @@ html, body {
 
 /* ===== RESPONSIVE: TABLET ===== */
 @media (min-width: 601px) and (max-width: 1024px) {
+    .sections-bar {
+        gap: 20px;
+    }
+
+    .section-canvas {
+        width: 100px;
+        height: 100px;
+    }
+
+    .section-label {
+        font-size: 10px;
+    }
+
     .planet-wrapper {
-        width: 220px;
-        height: 220px;
+        width: 320px;
+        height: 320px;
     }
 
     .play-btn {
@@ -768,9 +856,22 @@ html, body {
 
 /* ===== RESPONSIVE: MOBILE ===== */
 @media (max-width: 600px) {
+    .sections-bar {
+        gap: 12px;
+    }
+
+    .section-canvas {
+        width: 75px;
+        height: 75px;
+    }
+
+    .section-label {
+        font-size: 8px;
+    }
+
     .planet-wrapper {
-        width: 170px;
-        height: 170px;
+        width: 250px;
+        height: 250px;
     }
 
     .play-btn {
